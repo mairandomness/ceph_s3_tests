@@ -35,7 +35,7 @@ Aws::String get_random_bucket_name() {
     return name;
 }
 
-int get_new_bucket(Aws::S3::S3Client s3_client, Aws::String bucket_name){
+Aws::String get_new_bucket(Aws::S3::S3Client s3_client, Aws::String bucket_name){
     Aws::S3::Model::CreateBucketRequest request;
     request.SetBucket(bucket_name);
 
@@ -43,15 +43,14 @@ int get_new_bucket(Aws::S3::S3Client s3_client, Aws::String bucket_name){
     if (outcome.IsSuccess())
     {
         std::cout << "Done!" << std::endl;
-        return 1;
     }
     else
     {
         std::cout << "CreateBucket error: " << bucket_name
                   << outcome.GetError().GetExceptionName() << std::endl
                   << outcome.GetError().GetMessage() << std::endl;
-        return 0;
     }
+    return bucket_name;
 }
 
 
@@ -74,8 +73,11 @@ int main(int argc, char* argv[]) {
 
     //tests here
 
+    Aws::String bucket;
+    bucket = get_new_bucket(s3_client, get_random_bucket_name());
 
-    while (get_new_bucket(s3_client, get_random_bucket_name()) != 1);
+    
+
 
 
     Aws::ShutdownAPI(options);
