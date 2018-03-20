@@ -1,8 +1,11 @@
 cmake_minimum_required(VERSION 3.9)
 project(ceph_s3_tests)
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 
+#######
+## GOOGLE TEST SETUP
+#######
 # Download and unpack googletest at configure time
 configure_file(CMakeLists.txt.in googletest-download/CMakeLists.txt)
 execute_process(COMMAND "${CMAKE_COMMAND}" -G "${CMAKE_GENERATOR}" .
@@ -33,6 +36,25 @@ endif()
 include_directories(cmake-build-debug/googletest-src/googlemock/include)
 include_directories(cmake-build-debug/googletest-src/googletest/include)
 
+########
+## AWS SDK SETUP
+########
+# Locate the AWS SDK for C++ package.
+# Requires that you build with:
+#   -Daws-sdk-cpp_DIR=/path/to/sdk_build
+# or export/set:
+#   CMAKE_PREFIX_PATH=/path/to/sdk_build
+set(AWS_MODULES core s3)
+set(AWS_TARGETS)
+foreach(MODULE ${AWS_MODULES})
+    find_package(aws-cpp-sdk-${MODULE} REQUIRED CONFIG
+            PATHS "${CMAKE_BINARY_DIR}/aws-sdk-cpp/lib/cmake/aws-cpp-sdk-${MODULE}")
+    list(APPEND AWS_TARGETS aws-cpp-sdk-${MODULE})
+endforeach()
+
+# Link to the SDK shared libraries.
+add_definitions(-DUSE_IMPORT_EXPORT)
+
 add_executable(ceph_s3_tests main.cpp)
 
-target_link_libraries(ceph_s3_tests gtest gtest_main)
+target_link_libraries(ceph_s3_tests gtest gtest_main aws-cpp-sdk-s3)
