@@ -21,10 +21,9 @@ ExternalProject_Add(amazonSdk
         LIST_SEPARATOR "|"
     INSTALL_DIR ${CMAKE_BINARY_DIR}/aws-sdk-cpp
 	CMAKE_ARGS
-	    -DBUILD_ONLY=s3
+	    -DBUILD_ONLY=s3|core
 	    -DCPP_STANDARD=17
 	    -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/aws-sdk-cpp
-	    LOG_CONFIGURE 1
 	    ${cmake_args}
 	PREFIX "${AMAZON_SDK_PATH}"
 )

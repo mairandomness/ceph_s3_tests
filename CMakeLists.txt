@@ -57,4 +57,4 @@ add_definitions(-DUSE_IMPORT_EXPORT)
 
 add_executable(ceph_s3_tests main.cpp)
 
-target_link_libraries(ceph_s3_tests gtest gtest_main aws-cpp-sdk-s3)
+target_link_libraries(ceph_s3_tests gtest gtest_main ${AWS_TARGETS})
