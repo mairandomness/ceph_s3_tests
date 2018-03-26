@@ -9,11 +9,7 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
 #include <aws/s3/model/Object.h>
-#include <aws/core/utils/memory/stl/AWSString.h>
-
-
 #include <random>   //for the bucket name generator
-//#include <iostream>
 
 int get_random_number(int a, int b) {
     std::random_device rd;
@@ -26,7 +22,7 @@ int get_random_number(int a, int b) {
 Aws::String get_random_bucket_name() {
     //creates a random s3 bucket name from 3 to 63 chars with numbers and lower letters
     //dashes and periods have some constraints to them, so I thought it would be easier
-    //to just leave them out
+    //to just leave them out for now. Since these tests don't use prefix, we left that idea out for simplicity
     int len;
     Aws::String name;
     char possibilities[37] = "0123456789abcdefghijklmnopqrstuvwxyz";
@@ -41,41 +37,25 @@ Aws::String get_random_bucket_name() {
     return name;
 }
 
-Aws::String get_new_bucket(Aws::S3::S3Client * s3_client, Aws::String bucket_name){
+Aws::S3::Model::CreateBucketOutcome get_new_bucket(Aws::S3::S3Client * s3_client, Aws::String bucket_name) {
     Aws::S3::Model::CreateBucketRequest request;
     request.SetBucket(bucket_name);
 
     auto outcome = s3_client->CreateBucket(request);
-    if (!outcome.IsSuccess())
-    {
-        std::cout << "CreateBucket error: " << bucket_name
-                  << outcome.GetError().GetExceptionName() << std::endl
-                  << outcome.GetError().GetMessage() << std::endl;
-    }
-    return bucket_name;
+
+    return outcome;
 }
 
-Aws::Vector<Aws::S3::Model::Object> list_objects(Aws::S3::S3Client * s3_client, Aws::String bucket_name) {
+Aws::S3::Model::ListObjectsOutcome list_objects(Aws::S3::S3Client * s3_client, Aws::String bucket_name) {
     Aws::S3::Model::ListObjectsRequest objects_request;
     objects_request.WithBucket(bucket_name);
 
     auto list_objects_outcome = s3_client->ListObjects(objects_request);
 
-    if (list_objects_outcome.IsSuccess())
-    {
-        return list_objects_outcome.GetResult().GetContents();
-
-    }
-    else
-    {
-        std::cout << "ListObjects error: " <<
-                  list_objects_outcome.GetError().GetExceptionName() << " " <<
-                  list_objects_outcome.GetError().GetMessage() << std::endl;
-        throw "Aborted";
-    }
+    return list_objects_outcome;
 }
 
-void put_new_object(Aws::S3::S3Client * s3_client, Aws::String bucket_name, Aws::String key_name, Aws::String file_name) {
+Aws::S3::Model::PutObjectOutcome put_new_object(Aws::S3::S3Client * s3_client, Aws::String bucket_name, Aws::String key_name, Aws::String file_name) {
     Aws::S3::Model::PutObjectRequest object_request;
     object_request.WithBucket(bucket_name).WithKey(key_name);
 
@@ -85,13 +65,7 @@ void put_new_object(Aws::S3::S3Client * s3_client, Aws::String bucket_name, Aws:
 
     auto put_object_outcome = s3_client->PutObject(object_request);
 
-    if (!put_object_outcome.IsSuccess())
-    {
-        std::cout << "PutObject error: " <<
-                  put_object_outcome.GetError().GetExceptionName() << " " <<
-                  put_object_outcome.GetError().GetMessage() << std::endl;
-        throw "Aborted";
-    }
+    return put_object_outcome;
 }
 
 
@@ -131,31 +105,62 @@ protected:
 };
 
 TEST_F(S3Tests, S3Tests_NewBucketIsEmpty_Test) {
-    Aws::String bucket;
-    bucket = get_new_bucket(s3_client, get_random_bucket_name());
-    Aws::Vector<Aws::S3::Model::Object> objects = list_objects(s3_client, bucket);
+    auto bucket = get_random_bucket_name();
+
+    EXPECT_TRUE(get_new_bucket(s3_client, bucket).IsSuccess());
+
+    auto list_objects_outcome = list_objects(s3_client, bucket);
+
+    EXPECT_TRUE(list_objects_outcome.IsSuccess());
+
+    auto objects = list_objects_outcome.GetResult().GetContents();
+
     EXPECT_EQ(0, objects.size());
 }
 
-TEST_F(S3Tests, S3Tests_BucketListDistinct__Test){
-    Aws::String bucket1, bucket2;
-    bucket1 = get_new_bucket(s3_client, get_random_bucket_name());
-    bucket2 = get_new_bucket(s3_client, get_random_bucket_name());
+
+TEST_F(S3Tests, S3Tests_BucketListDistinct__Test) {
+//this test is a bit different than the version in python, just a bit more through,
+//we are also testing that the bucket that had an object put in it has one object.
+    auto bucket1 = get_random_bucket_name();
+    auto bucket2 = get_random_bucket_name();
+
+    EXPECT_TRUE(get_new_bucket(s3_client, bucket1).IsSuccess());
+    EXPECT_TRUE(get_new_bucket(s3_client, bucket2).IsSuccess());
 
     std::ofstream outfile ("test.txt");
-    outfile << "Hey, this worked!" << std::endl;
+    outfile << "Hey, this is a new test file!" << std::endl;
     outfile.close();
 
     put_new_object(s3_client, bucket1, "asdf", "test.txt");
-    Aws::Vector<Aws::S3::Model::Object> objects = list_objects(s3_client, bucket2);
-    EXPECT_EQ(0, objects.size());
+
+    auto outcome_list_bucket1 = list_objects(s3_client, bucket1);
+    auto outcome_list_bucket2 = list_objects(s3_client, bucket2);
+
+    EXPECT_TRUE(outcome_list_bucket1.IsSuccess());
+    EXPECT_TRUE(outcome_list_bucket2.IsSuccess());
+
+    auto objects_bucket1 = outcome_list_bucket1.GetResult().GetContents();
+    auto objects_bucket2 = outcome_list_bucket2.GetResult().GetContents();
+
+    EXPECT_EQ(0, objects_bucket2.size());
+    EXPECT_EQ(1, objects_bucket1.size());
 }
 
+TEST_F(S3Tests, S3Tests_BucketNotExist_Test) {
+    Aws::String bucket;
+    bucket = get_random_bucket_name();
 
+    auto outcome_list = list_objects(s3_client, bucket);
+
+    EXPECT_FALSE(outcome_list.IsSuccess());
+    EXPECT_EQ(Aws::Http::HttpResponseCode::NOT_FOUND, outcome_list.GetError().GetResponseCode());
+    EXPECT_EQ(Aws::S3::S3Errors::NO_SUCH_BUCKET, outcome_list.GetError().GetErrorType());
+    EXPECT_EQ("NoSuchBucket", outcome_list.GetError().GetExceptionName());
+}
 
 int main(int argc, char* argv[]) {
     testing::InitGoogleTest(&argc, argv);
     RUN_ALL_TESTS();
-    std::cout << "Hello, World!" << std::endl;
     return 0;
 }
